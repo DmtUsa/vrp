@@ -7,15 +7,15 @@ from matplotlib import pyplot as plt
 from scipy.spatial import distance_matrix
 
 
-class ILP:
+class VRP:
     """
     Integer Linear Program for Vehicle Routing Problem
     """
 
     def __init__(
         self,
-        M: int = 50,
-        N: int = 10,
+        M: int = 5,
+        N: int = 2,
         max_demand: int = 10,
         capacity_slack: float = 0,
         random_seed: int = None,
@@ -28,19 +28,19 @@ class ILP:
 
         # generate M+N random locations on a unit square
         coordinates = np.random.uniform(size=2 * (self.M + self.N))
-        coordinates = np.vstack(
+        self.coordinates = np.vstack(
             (coordinates[: (self.M + self.N)], coordinates[(self.M + self.N) :])
         ).T
         # compute distance matrix
-        self.D = distance_matrix(coordinates, coordinates)
+        self.D = distance_matrix(self.coordinates, self.coordinates)
         # generate demand per customer at random
         self.d = np.random.choice(np.arange(1, max_demand + 1), size=self.M + self.N)
-        self.d[M:] = 0
+        self.d[self.M :] = 0
         # calculate capacity given the capacity_slack level
         self.C = np.ceil(self.d.sum() * (1 + capacity_slack) / self.N)
         self.solution = None
 
-    def solve(self) -> None:
+    def solve_vehicle_flow(self) -> None:
 
         opt_model = pulp.LpProblem(name="VRP")
 
@@ -63,7 +63,7 @@ class ILP:
         # decision variables u_i
         # indicating the rank of customer i in the route
         u = {
-            i: pulp.LpVariable(cat=pulp.LpBinary, name=f"u_{i}")
+            i: pulp.LpVariable(cat=pulp.LpInteger, name=f"u_{i}", upBound=self.M)
             for i in C
         }
 
@@ -71,7 +71,7 @@ class ILP:
         constraints_1 = {
             j: opt_model.addConstraint(
                 pulp.LpConstraint(
-                    e=pulp.lpSum(x[i, j, k] for i in C for k in T),
+                    e=pulp.lpSum(x[i, j, k] for i in L for k in T),
                     sense=pulp.LpConstraintEQ,
                     rhs=1,
                     name=f"1_constraint_{j}",
@@ -84,7 +84,7 @@ class ILP:
         constraints_2 = {
             i: opt_model.addConstraint(
                 pulp.LpConstraint(
-                    e=pulp.lpSum(x[i, j, k] for j in C for k in T),
+                    e=pulp.lpSum(x[i, j, k] for j in L for k in T),
                     sense=pulp.LpConstraintEQ,
                     rhs=1,
                     name=f"2_constraint_{i}",
@@ -164,10 +164,10 @@ class ILP:
         }
 
         # Subtours elimination constraints
-        constraints_7 = {
+        constraints_8 = {
             (i, j, k): opt_model.addConstraint(
                 pulp.LpConstraint(
-                    e=u[i] - u[j] + self.M * x[i, k, k],
+                    e=u[i] - u[j] + self.M * x[i, j, k],
                     sense=pulp.LpConstraintLE,
                     rhs=self.M - 1,
                     name=f"8_constraint_{i}_{j}_{k}",
@@ -184,14 +184,53 @@ class ILP:
         )
 
         # set to maximize the objective
-        opt_model.sense = pulp.LpMaximize
+        opt_model.sense = pulp.LpMinimize
         opt_model.setObjective(objective)
 
         # solving with CBC solver
         pulp.LpSolverDefault.msg = 1
         opt_model.solve()
 
+        # extract solution
+        self.solution = [
+            {"from": i, "to": j, "by": k,}
+            for i in L
+            for j in L
+            for k in T
+            if (x[i, j, k].varValue == 1)
+        ]
+
         return None
 
     def plot(self):
-
+        plt.scatter(
+            self.coordinates[: -self.N, 0],
+            self.coordinates[: -self.N, 1],
+            marker="o",
+            s=100,
+            c="blue",
+        )
+        plt.scatter(
+            self.coordinates[-self.N :, 0],
+            self.coordinates[-self.N :, 1],
+            marker="^",
+            s=200,
+            c="red",
+        )
+        if self.solution is not None:
+            for line in self.solution:
+                plt.plot(
+                    [
+                        self.coordinates[line["from"]][0],
+                        self.coordinates[line["to"]][0],
+                    ],
+                    [
+                        self.coordinates[line["from"]][1],
+                        self.coordinates[line["to"]][1],
+                    ],
+                    c="black",
+                )
+        plt.xlim(0, 1)
+        plt.ylim(0, 1)
+        plt.show()
+        return None
