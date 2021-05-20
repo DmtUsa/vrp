@@ -34,7 +34,8 @@ class ILP:
         # compute distance matrix
         self.D = distance_matrix(coordinates, coordinates)
         # generate demand per customer at random
-        self.d = np.random.choice(np.arange(1, max_demand + 1), size=self.M)
+        self.d = np.random.choice(np.arange(1, max_demand + 1), size=self.M + self.N)
+        self.d[M:] = 0
         # calculate capacity given the capacity_slack level
         self.C = np.ceil(self.d.sum() * (1 + capacity_slack) / self.N)
         self.solution = None
@@ -139,6 +140,19 @@ class ILP:
                 )
             )
             for i in L
+            for k in T
+        }
+
+        # Capacity constraints
+        constraints_7 = {
+            k: opt_model.addConstraint(
+                pulp.LpConstraint(
+                    e=pulp.lpSum(self.d[i] * x[i, j, k] for i in L for j in L),
+                    sense=pulp.LpConstraintLE,
+                    rhs=self.C,
+                    name=f"7_constraint_{i}_{k}",
+                )
+            )
             for k in T
         }
 
