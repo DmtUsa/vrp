@@ -60,6 +60,13 @@ class ILP:
             for k in T
         }
 
+        # decision variables u_i
+        # indicating the rank of customer i in the route
+        u = {
+            i: pulp.LpVariable(cat=pulp.LpBinary, name=f"u_{i}")
+            for i in C
+        }
+
         # Each customer location should have an inflow arc
         constraints_1 = {
             j: opt_model.addConstraint(
@@ -80,7 +87,7 @@ class ILP:
                     e=pulp.lpSum(x[i, j, k] for j in C for k in T),
                     sense=pulp.LpConstraintEQ,
                     rhs=1,
-                    name=f"1_constraint_{i}",
+                    name=f"2_constraint_{i}",
                 )
             )
             for i in C
@@ -150,9 +157,24 @@ class ILP:
                     e=pulp.lpSum(self.d[i] * x[i, j, k] for i in L for j in L),
                     sense=pulp.LpConstraintLE,
                     rhs=self.C,
-                    name=f"7_constraint_{i}_{k}",
+                    name=f"7_constraint_{k}",
                 )
             )
+            for k in T
+        }
+
+        # Subtours elimination constraints
+        constraints_7 = {
+            (i, j, k): opt_model.addConstraint(
+                pulp.LpConstraint(
+                    e=u[i] - u[j] + self.M * x[i, k, k],
+                    sense=pulp.LpConstraintLE,
+                    rhs=self.M - 1,
+                    name=f"8_constraint_{i}_{j}_{k}",
+                )
+            )
+            for i in C
+            for j in [x for x in C if x != i]
             for k in T
         }
 
@@ -170,3 +192,6 @@ class ILP:
         opt_model.solve()
 
         return None
+
+    def plot(self):
+
