@@ -1,7 +1,4 @@
-from typing import Dict, List
-
 import numpy as np
-import pandas as pd
 import pulp
 from matplotlib import pyplot as plt
 from scipy.spatial import distance_matrix
@@ -20,6 +17,13 @@ class VRP:
         capacity_slack: float = 0,
         random_seed: int = None,
     ):
+        """
+        :param M: Number of customers
+        :param N: Number of teams / bases
+        :param max_demand: maximum number of panels / demand per customer
+        :param capacity_slack: control parameter for how tight the capacities should be
+        :param random_seed: if None no seed is set
+        """
         self.M = M
         self.N = N
         # set random seed
@@ -40,7 +44,11 @@ class VRP:
         self.C = np.ceil(self.d.sum() * (1 + capacity_slack) / self.N)
         self.solution = None
 
-    def solve_vehicle_flow(self) -> None:
+    def solve(self) -> None:
+        """
+        Formulate and solve the Vehicle Flow Formulation
+        :return:
+        """
 
         opt_model = pulp.LpProblem(name="VRP")
 
@@ -202,7 +210,12 @@ class VRP:
 
         return None
 
-    def plot(self):
+    def plot(self) -> None:
+        """
+        Plot the network and the solution (if any)
+        :return:
+        """
+        # plot customers
         plt.scatter(
             self.coordinates[: -self.N, 0],
             self.coordinates[: -self.N, 1],
@@ -210,6 +223,11 @@ class VRP:
             s=100,
             c="blue",
         )
+
+        for i in range(self.M):
+            plt.annotate(self.d[i], (self.coordinates[i][0], self.coordinates[i][1]+0.02))
+
+        # plot team bases
         plt.scatter(
             self.coordinates[-self.N :, 0],
             self.coordinates[-self.N :, 1],
@@ -217,6 +235,11 @@ class VRP:
             s=200,
             c="red",
         )
+
+        for i in range(self.M, self.M + self.N):
+            plt.annotate(int(self.C), (self.coordinates[i][0], self.coordinates[i][1]+0.02))
+
+        # plot routes
         if self.solution is not None:
             for line in self.solution:
                 plt.plot(
@@ -233,4 +256,5 @@ class VRP:
         plt.xlim(0, 1)
         plt.ylim(0, 1)
         plt.show()
+
         return None
